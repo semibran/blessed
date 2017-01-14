@@ -142,18 +142,15 @@ function create(size, id) {
   }
 
   function findPath(start, goal, costs, diagonals) {
-
+    
     if (!costs)
-      costs = {
-        tiles: tileCosts,
-        cells: {}
-      }
+      costs = {}
 
     if (!costs.tiles)
-      costs = {
-        tiles: costs,
-        cells: {}
-      }
+      costs.tiles = tileCosts
+
+    if (!costs.cells)
+      costs.cells = {}
 
     let path = []
 

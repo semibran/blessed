@@ -76,13 +76,13 @@ let moving = false
 function ascend() {
   let newFloor = floor - 1
   if (!floors[newFloor])
-    log.add(`You can't leave the dungeon!`)
+    log.add(`You can't leave the dungeon.`)
   else {
     floor = newFloor
     hero.world = world = floors[floor]
     hero.cell = world.exit
     hero.look()
-    log.add(`You go back upstairs to floor ${floor}.`)
+    log.add(`You go back upstairs to Floor ${floor}.`)
   }
   rerender()
 }
@@ -94,23 +94,21 @@ function descend() {
     hero.look()
     floors[floor] = world
     if (floor === 1)
-      log.add(`Welcome to the Dungeon!`)
+      log.add(`{${YELLOW}-fg}Welcome to the Dungeon!{/}`)
     else
-      log.add(`You head downstairs to floor ${floor}.`)
+      log.add(`You head downstairs to {${YELLOW}-fg}Floor ${floor}{/}.`)
   } else {
     hero.world = world = floors[floor]
     hero.cell = world.entrance
     hero.look()
-    log.add(`You head back downstairs to floor ${floor}.`)
+    log.add(`You head back downstairs to {${YELLOW}-fg}Floor ${floor}{/}.`)
   }
   rerender()
 }
 
 function move(direction) {
-  let moved = hero.move(direction)
-  if (moved) {
-    rerender()
-  }
+  hero.move(direction)
+  rerender()
 }
 
 function rerender() {
@@ -146,6 +144,11 @@ box.on('click', event => {
 
   let target = [event.x - box.aleft, event.y - box.atop]
 
+  if (moving) {
+    moving = false
+    return
+  }
+
   if (Cell.isEqual(hero.cell, target)) {
     let tile = world.tileAt(hero.cell)
     if (tile.kind === 'entrance')
@@ -155,13 +158,16 @@ box.on('click', event => {
     return
   }
 
-  function move() {
+  function step() {
+    if (!moving)
+      return
     let moved = moving = hero.moveTo(target)
     if (moved)
-      setTimeout(move, 1000 / 30)
+      setTimeout(step, 1000 / 30)
     rerender()
   }
-  move()
+  moving = true
+  step()
 
 })
 
@@ -170,13 +176,25 @@ box.on('mouseout', event => {
   rerender()
 })
 
+const directions = Cell.directions
+const WASD = {
+  w: directions.up,
+  a: directions.left,
+  s: directions.down,
+  d: directions.right
+}
+
 screen.on('keypress', (ch, key) => {
 
   if (key.name === 'escape' || key.ctrl && key.name === 'c')
     return process.exit(0)
 
-  if (key.name in Cell.cardinalDirections && !moving)
-    move(Cell.directions[key.name])
+  if (!moving) {
+    if (key.name in directions)
+      move(directions[key.name])
+    else if (key.name in WASD)
+      move(WASD[key.name])
+  }
 
   let tile = world.tileAt(hero.cell)
   if (key.ch === '<' && tile.kind === 'entrance')

@@ -11,10 +11,15 @@ const directions = {
 const { left, upLeft, up, upRight, right, downRight, down, downLeft } = directions
 const cardinalDirections = { left, up, right, down }
 
-const constants = { left, right, up, down, upLeft, upRight, downLeft, downRight, directions, cardinalDirections }
-const methods   = { toString, fromString, toIndex, fromIndex, isEqual, isEdge, isInside, getNeighbors, getManhattan, getDistance }
+const Cell = {
 
-const Cell = Object.assign({}, constants, methods)
+  // Constants
+  left, right, up, down, upLeft, upRight, downLeft, downRight, directions, cardinalDirections,
+
+  // Methods
+  toString, fromString, toIndex, fromIndex, isEqual, isEdge, isInside, getNeighbors, getManhattan, getDistance
+
+}
 
 export default Cell
 

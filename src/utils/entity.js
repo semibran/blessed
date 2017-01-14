@@ -69,8 +69,16 @@ function create(options) {
   }
 
   function moveTo(target) {
-    if ( !path || path[path.length - 1] !== target )
-      path = entity.world.findPath(entity.cell, target)
+    if ( !path || path[path.length - 1] !== target ) {
+      let cells = {}
+      let entities = [...entity.world.elements].filter(element => element.type === 'entity')
+      entity.world.data.forEach((id, index) => {
+        let cell = Cell.fromIndex(index, entity.world.size)
+        if (!entity.known[entity.world.id][cell] || entities.filter(entity => Cell.isEqual(entity.cell, cell)).length)
+          cells[cell] = Infinity
+      })
+      path = entity.world.findPath(entity.cell, target, { cells })
+    }
     if (!path)
       return false
     let next

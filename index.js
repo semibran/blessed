@@ -355,7 +355,21 @@ function create$1(options) {
   }
 
   function moveTo(target) {
-    if (!path || path[path.length - 1] !== target) path = entity.world.findPath(entity.cell, target);
+    if (!path || path[path.length - 1] !== target) {
+      (function () {
+        var cells = {};
+        var entities = [].concat(toConsumableArray(entity.world.elements)).filter(function (element) {
+          return element.type === 'entity';
+        });
+        entity.world.data.forEach(function (id, index) {
+          var cell = Cell.fromIndex(index, entity.world.size);
+          if (!entity.known[entity.world.id][cell] || entities.filter(function (entity) {
+            return Cell.isEqual(entity.cell, cell);
+          }).length) cells[cell] = Infinity;
+        });
+        path = entity.world.findPath(entity.cell, target, { cells: cells });
+      })();
+    }
     if (!path) return false;
     var next = void 0;
     path.some(function (cell, index) {
@@ -617,15 +631,11 @@ function create$2(size, id) {
 
   function findPath(start, goal, costs, diagonals) {
 
-    if (!costs) costs = {
-      tiles: tileCosts,
-      cells: {}
-    };
+    if (!costs) costs = {};
 
-    if (!costs.tiles) costs = {
-      tiles: costs,
-      cells: {}
-    };
+    if (!costs.tiles) costs.tiles = tileCosts;
+
+    if (!costs.cells) costs.cells = {};
 
     var path = [];
 
@@ -1353,7 +1363,7 @@ var fillEnds = function () {
   };
 }();
 
-var directions = {
+var directions$1 = {
   left: [-1, 0],
   upLeft: [-1, -1],
   up: [0, -1],
@@ -1363,21 +1373,26 @@ var directions = {
   down: [0, 1],
   downLeft: [-1, 1]
 };
-var left = directions.left;
-var upLeft = directions.upLeft;
-var up = directions.up;
-var upRight = directions.upRight;
-var right = directions.right;
-var downRight = directions.downRight;
-var down = directions.down;
-var downLeft = directions.downLeft;
+var left = directions$1.left;
+var upLeft = directions$1.upLeft;
+var up = directions$1.up;
+var upRight = directions$1.upRight;
+var right = directions$1.right;
+var downRight = directions$1.downRight;
+var down = directions$1.down;
+var downLeft = directions$1.downLeft;
 
 var cardinalDirections = { left: left, up: up, right: right, down: down };
 
-var constants = { left: left, right: right, up: up, down: down, upLeft: upLeft, upRight: upRight, downLeft: downLeft, downRight: downRight, directions: directions, cardinalDirections: cardinalDirections };
-var methods = { toString: toString, fromString: fromString, toIndex: toIndex, fromIndex: fromIndex, isEqual: isEqual, isEdge: isEdge, isInside: isInside, getNeighbors: getNeighbors, getManhattan: getManhattan, getDistance: getDistance };
+var Cell = {
 
-var Cell = Object.assign({}, constants, methods);
+  // Constants
+  left: left, right: right, up: up, down: down, upLeft: upLeft, upRight: upRight, downLeft: downLeft, downRight: downRight, directions: directions$1, cardinalDirections: cardinalDirections,
+
+  // Methods
+  toString: toString, fromString: fromString, toIndex: toIndex, fromIndex: fromIndex, isEqual: isEqual, isEdge: isEdge, isInside: isInside, getNeighbors: getNeighbors, getManhattan: getManhattan, getDistance: getDistance
+
+};
 
 function toString(cell) {
   return cell.toString();
@@ -1451,7 +1466,7 @@ function getNeighbors(cell, diagonals, step) {
 
   var neighbors = [];
   var dirs = cardinalDirections;
-  if (diagonals) dirs = directions;
+  if (diagonals) dirs = directions$1;
   for (var key in dirs) {
     var _dirs$key = slicedToArray(dirs[key], 2),
         dx = _dirs$key[0],
@@ -1645,6 +1660,7 @@ screen.title = 'Hello world!';
 var MAROON = Color.MAROON;
 var OLIVE = Color.OLIVE;
 var TEAL = Color.TEAL;
+var YELLOW = Color.GRAY;
 var GRAY = Color.YELLOW;
 var WHITE = Color.WHITE;
 
@@ -1743,12 +1759,12 @@ var moving = false;
 
 function ascend() {
   var newFloor = floor - 1;
-  if (!floors[newFloor]) log.add('You can\'t leave the dungeon!');else {
+  if (!floors[newFloor]) log.add('You can\'t leave the dungeon.');else {
     floor = newFloor;
     hero.world = world = floors[floor];
     hero.cell = world.exit;
     hero.look();
-    log.add('You go back upstairs to floor ' + floor + '.');
+    log.add('You go back upstairs to Floor ' + floor + '.');
   }
   rerender();
 }
@@ -1759,21 +1775,19 @@ function descend() {
     world = Gen$$1.createDungeon(25, rng, hero, floor);
     hero.look();
     floors[floor] = world;
-    if (floor === 1) log.add('Welcome to the Dungeon!');else log.add('You head downstairs to floor ' + floor + '.');
+    if (floor === 1) log.add('{' + YELLOW + '-fg}Welcome to the Dungeon!{/}');else log.add('You head downstairs to {' + YELLOW + '-fg}Floor ' + floor + '{/}.');
   } else {
     hero.world = world = floors[floor];
     hero.cell = world.entrance;
     hero.look();
-    log.add('You head back downstairs to floor ' + floor + '.');
+    log.add('You head back downstairs to {' + YELLOW + '-fg}Floor ' + floor + '{/}.');
   }
   rerender();
 }
 
 function move(direction) {
-  var moved = hero.move(direction);
-  if (moved) {
-    rerender();
-  }
+  hero.move(direction);
+  rerender();
 }
 
 function rerender() {
@@ -1809,18 +1823,25 @@ box.on('click', function (event) {
 
   var target = [event.x - box.aleft, event.y - box.atop];
 
+  if (moving) {
+    moving = false;
+    return;
+  }
+
   if (Cell.isEqual(hero.cell, target)) {
     var tile = world.tileAt(hero.cell);
     if (tile.kind === 'entrance') ascend();else if (tile.kind === 'exit') descend();
     return;
   }
 
-  function move() {
+  function step() {
+    if (!moving) return;
     var moved = moving = hero.moveTo(target);
-    if (moved) setTimeout(move, 1000 / 30);
+    if (moved) setTimeout(step, 1000 / 30);
     rerender();
   }
-  move();
+  moving = true;
+  step();
 });
 
 box.on('mouseout', function (event) {
@@ -1828,11 +1849,21 @@ box.on('mouseout', function (event) {
   rerender();
 });
 
+var directions = Cell.directions;
+var WASD = {
+  w: directions.up,
+  a: directions.left,
+  s: directions.down,
+  d: directions.right
+};
+
 screen.on('keypress', function (ch, key) {
 
   if (key.name === 'escape' || key.ctrl && key.name === 'c') return process.exit(0);
 
-  if (key.name in Cell.cardinalDirections && !moving) move(Cell.directions[key.name]);
+  if (!moving) {
+    if (key.name in directions) move(directions[key.name]);else if (key.name in WASD) move(WASD[key.name]);
+  }
 
   var tile = world.tileAt(hero.cell);
   if (key.ch === '<' && tile.kind === 'entrance') ascend();else if (key.ch === '>' && tile.kind === 'exit') descend();
