@@ -350,13 +350,12 @@ function create$1(options) {
     } else if (tile.door) {
       entity.world.setAt(target, World$$1.tileIds.DOOR_OPEN);
       look();
-      moved = true;
     }
     return moved;
   }
 
   function moveTo(target) {
-    if (!path || path[path.length - 1] !== target) path = entity.world.findPath(entity, target);
+    if (!path || path[path.length - 1] !== target) path = entity.world.findPath(entity.cell, target);
     if (!path) return false;
     var next = void 0;
     path.some(function (cell, index) {
@@ -398,7 +397,7 @@ function create$1(options) {
   return Object.assign(entity, methods);
 }
 
-var tileData = ['floor walkable', 'wall opaque', 'door opaque door', 'doorOpen walkable door', 'doorSecret opaque door', 'entrance walkable stairs', 'exit walkable stairs'];
+var tileData = ['floor walkable', 'wall opaque', 'door opaque door', 'doorOpen walkable door', 'doorSecret opaque door secret', 'entrance walkable stairs', 'exit walkable stairs'];
 
 var tiles = function (tileData) {
   var tiles = [];
@@ -473,13 +472,50 @@ var tileIds = function (tiles) {
   return tileIds;
 }(tiles);
 
+var tileCosts = function (tiles) {
+  var tileCosts = [];
+  var _iteratorNormalCompletion3 = true;
+  var _didIteratorError3 = false;
+  var _iteratorError3 = undefined;
+
+  try {
+    for (var _iterator3 = tiles[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+      var tile = _step3.value;
+
+      var cost = 0;
+      if (!tile.walkable && !tile.door) cost = Infinity;
+      if (tile.secret) cost = 1000;
+      if (tile.door) {
+        cost++;
+        if (!tile.walkable) cost++;
+      }
+      tileCosts.push(cost);
+    }
+  } catch (err) {
+    _didIteratorError3 = true;
+    _iteratorError3 = err;
+  } finally {
+    try {
+      if (!_iteratorNormalCompletion3 && _iterator3.return) {
+        _iterator3.return();
+      }
+    } finally {
+      if (_didIteratorError3) {
+        throw _iteratorError3;
+      }
+    }
+  }
+
+  return tileCosts;
+}(tiles);
+
 var FLOOR = tileIds.FLOOR;
 var WALL = tileIds.WALL;
 var ENTRANCE = tileIds.ENTRANCE;
 var EXIT = tileIds.EXIT;
 
 
-var World$$1 = { create: create$2, tiles: tiles, tileIds: tileIds };
+var World$$1 = { create: create$2, tiles: tiles, tileIds: tileIds, tileCosts: tileCosts };
 
 function create$2(size, id) {
 
@@ -490,7 +526,7 @@ function create$2(size, id) {
     size: size, data: data, elements: new Set(), id: id || null, entrance: null, exit: null,
 
     // Methods
-    getAt: getAt, tileAt: tileAt, elementsAt: elementsAt, setAt: setAt, fill: fill, clear: clear, spawn: spawn, kill: kill
+    getAt: getAt, tileAt: tileAt, elementsAt: elementsAt, setAt: setAt, fill: fill, clear: clear, spawn: spawn, kill: kill, findPath: findPath
 
   };
 
@@ -523,27 +559,27 @@ function create$2(size, id) {
     if (typeof value === 'undefined') value = WALL;
     if (rect) {
       var cells = Rect.getCells(rect);
-      var _iteratorNormalCompletion3 = true;
-      var _didIteratorError3 = false;
-      var _iteratorError3 = undefined;
+      var _iteratorNormalCompletion4 = true;
+      var _didIteratorError4 = false;
+      var _iteratorError4 = undefined;
 
       try {
-        for (var _iterator3 = cells[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
-          var cell = _step3.value;
+        for (var _iterator4 = cells[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+          var cell = _step4.value;
 
           setAt(data, cell, value);
         }
       } catch (err) {
-        _didIteratorError3 = true;
-        _iteratorError3 = err;
+        _didIteratorError4 = true;
+        _iteratorError4 = err;
       } finally {
         try {
-          if (!_iteratorNormalCompletion3 && _iterator3.return) {
-            _iterator3.return();
+          if (!_iteratorNormalCompletion4 && _iterator4.return) {
+            _iterator4.return();
           }
         } finally {
-          if (_didIteratorError3) {
-            throw _iteratorError3;
+          if (_didIteratorError4) {
+            throw _iteratorError4;
           }
         }
       }
@@ -577,6 +613,115 @@ function create$2(size, id) {
 
   function kill(element) {
     elements.remove(element);
+  }
+
+  function findPath(start, goal, costs, diagonals) {
+
+    if (!costs) costs = {
+      tiles: tileCosts,
+      cells: {}
+    };
+
+    if (!costs.tiles) costs = {
+      tiles: costs,
+      cells: {}
+    };
+
+    var path = [];
+
+    var startKey = start.toString();
+    var goalKey = goal.toString();
+
+    var opened = [startKey];
+    var closed = {};
+
+    var scores = { f: {}, g: {} };
+    var parent = {};
+
+    var cells = data.map(function (id, index) {
+      return Cell.fromIndex(index, size);
+    });
+    var _iteratorNormalCompletion5 = true;
+    var _didIteratorError5 = false;
+    var _iteratorError5 = undefined;
+
+    try {
+      for (var _iterator5 = cells[Symbol.iterator](), _step5; !(_iteratorNormalCompletion5 = (_step5 = _iterator5.next()).done); _iteratorNormalCompletion5 = true) {
+        var _cell2 = _step5.value;
+
+        scores.g[_cell2] = Infinity;
+        scores.f[_cell2] = Infinity;
+      }
+    } catch (err) {
+      _didIteratorError5 = true;
+      _iteratorError5 = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion5 && _iterator5.return) {
+          _iterator5.return();
+        }
+      } finally {
+        if (_didIteratorError5) {
+          throw _iteratorError5;
+        }
+      }
+    }
+
+    scores.g[start] = 0;
+    scores.f[start] = Cell.getManhattan(start, goal);
+
+    while (opened.length) {
+      if (opened.length > 1) opened = opened.sort(function (a, b) {
+        return scores.f[b] - scores.f[a];
+      });
+      var cellKey = opened.pop();
+      var cell = Cell.fromString(cellKey);
+      if (cellKey === goalKey) {
+        var _cell = goal;
+        do {
+          path.unshift(_cell);
+          _cell = parent[_cell];
+        } while (_cell);
+        return path;
+      }
+      closed[cell] = true;
+      var _iteratorNormalCompletion6 = true;
+      var _didIteratorError6 = false;
+      var _iteratorError6 = undefined;
+
+      try {
+        for (var _iterator6 = Cell.getNeighbors(cell, diagonals)[Symbol.iterator](), _step6; !(_iteratorNormalCompletion6 = (_step6 = _iterator6.next()).done); _iteratorNormalCompletion6 = true) {
+          var neighbor = _step6.value;
+
+          if (!Cell.isInside(neighbor, size) || neighbor in closed) continue;
+          var key = neighbor.toString();
+          var tileCost = costs.tiles[getAt(neighbor)] || 0;
+          var cellCost = costs.cells[neighbor] || 0;
+          var cost = tileCost + cellCost;
+          if (cost === Infinity && key !== goalKey) continue;
+          var g = scores.g[cell] + 1 + cost;
+          if (!opened.includes(key)) opened.push(key);else if (g >= scores.g[neighbor]) continue;
+          parent[neighbor] = cell;
+          scores.g[neighbor] = g;
+          scores.f[neighbor] = g + Cell.getManhattan(neighbor, goal);
+        }
+      } catch (err) {
+        _didIteratorError6 = true;
+        _iteratorError6 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion6 && _iterator6.return) {
+            _iterator6.return();
+          }
+        } finally {
+          if (_didIteratorError6) {
+            throw _iteratorError6;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 }
 
@@ -745,7 +890,11 @@ function createDungeon(size, seed, hero, id) {
       if (flags.has('secret')) rooms = world.rooms.secret;else rooms = world.rooms.normal;
 
       var _room = rng$1.choose([].concat(toConsumableArray(rooms)));
-      if (flags.has('center')) cell = _room.center;else cell = rng$1.choose(_room.cells);
+      if (flags.has('center')) cell = _room.center;else {
+        do {
+          cell = rng$1.choose(_room.cells);
+        } while (world.getAt(cell) !== FLOOR$1 || world.elementsAt(cell).length);
+      }
     }
 
     world.spawn(element, cell);
@@ -754,7 +903,7 @@ function createDungeon(size, seed, hero, id) {
   }
 
   if (hero) {
-    var _cell = spawn(hero);
+    var _cell = spawn(hero, 'center');
     spawn(ENTRANCE$1, _cell);
   }
   spawn(EXIT$1, 'center');
@@ -1590,6 +1739,7 @@ var floor = 0;
 var world = void 0;
 var hero = Entity$$1.create({ kind: 'human', faction: 'hero' });
 var mouse = null;
+var moving = false;
 
 function ascend() {
   var newFloor = floor - 1;
@@ -1609,7 +1759,7 @@ function descend() {
     world = Gen$$1.createDungeon(25, rng, hero, floor);
     hero.look();
     floors[floor] = world;
-    log.add('You head downstairs to floor ' + floor + '.');
+    if (floor === 1) log.add('Welcome to the Dungeon!');else log.add('You head downstairs to floor ' + floor + '.');
   } else {
     hero.world = world = floors[floor];
     hero.cell = world.entrance;
@@ -1643,12 +1793,34 @@ var log = blessed.log({
   bottom: 0,
   width: '100%',
   height: 7,
-  tags: true
+  tags: true,
+  border: {
+    type: 'line'
+  }
 });
 
 box.on('mousemove', function (event) {
   mouse = [event.x - box.aleft, event.y - box.atop];
   rerender();
+});
+
+box.on('click', function (event) {
+  mouse = [event.x - box.aleft, event.y - box.atop];
+
+  var target = [event.x - box.aleft, event.y - box.atop];
+
+  if (Cell.isEqual(hero.cell, target)) {
+    var tile = world.tileAt(hero.cell);
+    if (tile.kind === 'entrance') ascend();else if (tile.kind === 'exit') descend();
+    return;
+  }
+
+  function move() {
+    var moved = moving = hero.moveTo(target);
+    if (moved) setTimeout(move, 1000 / 30);
+    rerender();
+  }
+  move();
 });
 
 box.on('mouseout', function (event) {
@@ -1660,7 +1832,7 @@ screen.on('keypress', function (ch, key) {
 
   if (key.name === 'escape' || key.ctrl && key.name === 'c') return process.exit(0);
 
-  if (key.name in Cell.cardinalDirections) move(Cell.directions[key.name]);
+  if (key.name in Cell.cardinalDirections && !moving) move(Cell.directions[key.name]);
 
   var tile = world.tileAt(hero.cell);
   if (key.ch === '<' && tile.kind === 'entrance') ascend();else if (key.ch === '>' && tile.kind === 'exit') descend();

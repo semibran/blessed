@@ -64,18 +64,17 @@ function create(options) {
     } else if (tile.door) {
       entity.world.setAt(target, World.tileIds.DOOR_OPEN)
       look()
-      moved = true
     }
     return moved
   }
 
   function moveTo(target) {
     if ( !path || path[path.length - 1] !== target )
-      path = entity.world.findPath(entity, target)
+      path = entity.world.findPath(entity.cell, target)
     if (!path)
       return false
     let next
-    path.some(function(cell, index) {
+    path.some((cell, index) => {
       if ( !Cell.isEqual(entity.cell, cell) )
         return
       next = path[index + 1]

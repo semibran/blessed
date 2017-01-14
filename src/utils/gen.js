@@ -79,8 +79,11 @@ function createDungeon(size, seed, hero, id) {
       let room = rng.choose([...rooms])
       if (flags.has('center'))
         cell = room.center
-      else
-        cell = rng.choose(room.cells)
+      else {
+        do {
+          cell = rng.choose(room.cells)
+        } while (world.getAt(cell) !== FLOOR || world.elementsAt(cell).length)
+      }
     }
 
     world.spawn(element, cell)
@@ -90,7 +93,7 @@ function createDungeon(size, seed, hero, id) {
   }
 
   if (hero) {
-    let cell = spawn(hero)
+    let cell = spawn(hero, 'center')
     spawn(ENTRANCE, cell)
   }
   spawn(EXIT, 'center')
