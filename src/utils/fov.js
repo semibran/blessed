@@ -1,19 +1,19 @@
-import { Cell, Gen } from './index'
+import { Cell } from './index'
 
 export default { get }
 
-function get(data, start, range) {
+function get(world, start, range) {
   let cells = []
   let i = 8
   while (i--)
-    cells = cells.concat( getOctant(data, start, range, i) )
+    cells = cells.concat(getOctant(world, start, range, i))
   cells.push(start)
   return cells
 }
 
-function getOctant(data, start, range, octant) {
+function getOctant(world, start, range, octant) {
   range = range || Infinity
-  let size = Gen.getSize(data)
+  let size = world.size
   let [x, y] = start
   let cells = []
   let shadows = []
@@ -33,7 +33,7 @@ function getOctant(data, start, range, octant) {
         let visible = !shadows.find( shadow => shadow.start <= projection.start && shadow.end >= projection.end )
         if (visible) {
           cells.push(cell)
-          if ( Gen.getTileAt(data, cell).opaque ) {
+          if (world.tileAt(cell).opaque) {
             let index
             for (index = 0; index < shadows.length; index++)
               if (shadows[index].start >= projection.start)

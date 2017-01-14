@@ -1,4 +1,4 @@
-import { Cell, Gen, FOV } from './index'
+import { Cell, World, FOV } from './index'
 
 export default { create }
 
@@ -24,28 +24,29 @@ function create(options) {
   let path = null
 
   function look() {
-    let cells = FOV.get(entity.world.data, entity.cell, 7)
+    let cells = FOV.get(entity.world, entity.cell, 7)
     entity.seeing = {}
+    if (!entity.known[entity.world.id])
+      entity.known[entity.world.id] = {}
     for (var cell of cells) {
-      let kind = Gen.getTileAt(entity.world.data, cell).name
-      let other = Gen.elementsAt(entity.world, cell)[0]
+      let kind = entity.world.tileAt(cell).kind
+      let other = entity.world.elementsAt(cell)[0]
       if (other)
         kind = other.kind
-      entity.known[cell] = kind
+      entity.known[entity.world.id][cell] = kind
       entity.seeing[cell] = true
     }
   }
 
   function move(direction) {
     let moved = false
-    let world = entity.world
     let [cellX, cellY] = entity.cell
     let [distX, distY] = direction
     let target = [cellX + distX, cellY + distY]
-    let id = Gen.getAt(world.data, target)
-    let tile = Gen.tiles[id]
-    let entities = Gen.entitiesAt(world, target)
-    let items    = Gen.itemsAt(world, target)
+    let tile = entity.world.tileAt(target)
+    let elements = entity.world.elementsAt(target)
+    let entities = elements.filter(element => element.type === 'entity')
+    let items    = elements.filter(element => element.type === 'item')
     if (entities.length) {
       let enemy = entities[0]
       attack(enemy)
@@ -61,7 +62,7 @@ function create(options) {
         look()
       }
     } else if (tile.door) {
-      Gen.openDoor(world, target)
+      entity.world.setAt(target, World.tileIds.DOOR_OPEN)
       look()
       moved = true
     }

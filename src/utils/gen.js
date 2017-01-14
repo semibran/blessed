@@ -1,68 +1,12 @@
-import { RNG, Cell, Rect } from './index'
+import { RNG, World, Cell, Rect } from './index'
 
-const [FLOOR, WALL, DOOR, DOOR_OPEN, DOOR_SECRET, ENTRANCE, EXIT] = [0, 1, 2, 3, 4, 5, 6]
-
-const tiles = [
-  {
-    name: 'floor',
-    walkable: true
-  },
-  {
-    name: 'wall',
-    opaque: true
-  },
-  {
-    name: 'door',
-    opaque: true,
-    door: true
-  },
-  {
-    name: 'doorOpen',
-    walkable: true,
-    door: true
-  },
-  {
-    name: 'doorSecret',
-    opaque: true,
-    door: true
-  },
-  {
-    name: 'entrance',
-    walkable: true,
-    stairs: true
-  },
-  {
-    name: 'exit',
-    walkable: true,
-    stairs: true
-  }
-]
+const { FLOOR, DOOR, DOOR_SECRET, ENTRANCE, EXIT } = World.tileIds
 
 let rng = RNG.create()
 
-let sqrt = function (cache) {
+export default { createDungeon }
 
-  cache = cache || {}
-
-  return function sqrt(num) {
-    let cached = cache[num]
-    if (cached)
-      return cached
-    let result = cache[num] = Math.sqrt(num)
-    return result
-  }
-
-}()
-
-export default { tiles, createWorld, createDungeon, spawn, fill, clear, getSize, getAt, getTileAt, setAt, elementsAt, entitiesAt, itemsAt, openDoor, closeDoor }
-
-function createWorld(size) {
-  let data = new Uint8ClampedArray(size * size)
-  let world = { size, data, entities: [], items: [], entrance: null, exit: null }
-  return world
-}
-
-function createDungeon(size, seed) {
+function createDungeon(size, seed, hero, id) {
 
   if (!size % 2)
     throw new RangeError(`Cannot create dungeon of even size ${size}`)
@@ -75,24 +19,23 @@ function createDungeon(size, seed) {
     rng.seed(seed)
   }
 
-  console.log('Seed:', seed)
+  // console.log('Seed:', seed)
 
-  let world = createWorld(size)
+  let world = World.create(size, id).fill()
+  let data = world.data
 
-  let data = fill(world.data)
-
-  let rooms = findRooms(data)
-  let mazes = findMazes(data, rooms)
-  let doors = findDoors(data, rooms, mazes)
-  fillEnds(data, mazes)
+  let rooms = findRooms(size)
+  let mazes = findMazes(size, rooms)
+  let doors = findDoors(rooms, mazes)
+  fillEnds(mazes)
 
   for (let room of rooms.list)
     for (let cell of room.cells)
-      setAt(data, cell, FLOOR)
+      world.setAt(cell, FLOOR)
 
   for (let maze of mazes.list)
     for (let cell of maze.cells)
-      setAt(data, cell, FLOOR)
+      world.setAt(cell, FLOOR)
 
   for (let cellId in doors) {
     let cell = Cell.fromString(cellId)
@@ -106,12 +49,51 @@ function createDungeon(size, seed) {
       rooms.secret.add(room)
     } else if (rng.choose())
       type = FLOOR
-    setAt(data, cell, type)
+    world.setAt(cell, type)
   }
 
-  Object.assign(world, { rooms })
+  world.rooms = rooms
 
-  spawn(world, EXIT, 'center')
+  function spawn(element, flags) {
+
+    let rooms, cell
+
+    if (!flags)
+      flags = []
+    else {
+      if (typeof flags === 'string')
+        flags = flags.split(' ')
+      else if (Array.isArray(flags)) {
+        cell = flags
+        flags = []
+      }
+    }
+    flags = new Set(flags)
+
+    if (!cell) {
+      if (flags.has('secret'))
+        rooms = world.rooms.secret
+      else
+        rooms = world.rooms.normal
+
+      let room = rng.choose([...rooms])
+      if (flags.has('center'))
+        cell = room.center
+      else
+        cell = rng.choose(room.cells)
+    }
+
+    world.spawn(element, cell)
+
+    return cell
+
+  }
+
+  if (hero) {
+    let cell = spawn(hero)
+    spawn(ENTRANCE, cell)
+  }
+  spawn(EXIT, 'center')
 
   return world
 }
@@ -138,9 +120,8 @@ let findRooms = function () {
 
   }()
 
-  return function findRooms(data) {
-    let area = data.length
-    let size = sqrt(area)
+  return function findRooms(size) {
+    let area = size * size
     let rooms = { list: [], normal: new Set, secret: new Set, cells: {}, edges: {} }
     let matrices = {}
     let fails = 0
@@ -190,9 +171,8 @@ let findRooms = function () {
 
 let findMazes = function () {
 
-  return function findMazes(data, rooms, step) {
+  return function findMazes(size, rooms, step) {
     step = step || 2
-    let size  = getSize(data)
     let mazes = { list: [], cells: {}, ends: {} }
     let nodes = new Set(findNodes(size)
       .filter(node => !(node in rooms.cells) && !Cell.getNeighbors(node, true).filter(neighbor => neighbor in rooms.cells).length)
@@ -257,7 +237,7 @@ let findMazes = function () {
 
 let findDoors = function () {
 
-  return function findDoors(data, rooms, mazes) {
+  return function findDoors(rooms, mazes) {
 
     let connectorRegions = getConnectors(rooms, mazes)
 
@@ -368,7 +348,7 @@ let findDoors = function () {
 
 let fillEnds = function () {
 
-  return function fillEnds(data, mazes) {
+  return function fillEnds(mazes) {
     mazes.ends = {}
     for (let maze of mazes.list) {
       let cells = new Set(maze.cells.map(Cell.toString))
@@ -381,7 +361,6 @@ let fillEnds = function () {
           ends.push(cell)
           continue
         }
-        setAt(data, cell, WALL)
         cells.delete(cell.toString())
         delete mazes.cells[cell]
         let next = neighbors[0]
@@ -396,146 +375,3 @@ let fillEnds = function () {
   }
 
 }()
-
-function spawn(world, element, cell) {
-  if (!world.rooms)
-    return null
-  if (typeof cell !== 'object') {
-    let valid
-    do {
-      let room = rng.choose( [...world.rooms.normal] )
-      if (cell !== 'center')
-        cell = rng.choose(room.cells)
-      else
-        cell = room.center
-    } while (elementsAt(world, cell).length && getAt(world.data, cell) === FLOOR)
-  }
-  if ( !isNaN(element) ) {
-    setAt(world.data, cell, element)
-    if (element === ENTRANCE)
-      world.entrance = cell
-    if (element === EXIT)
-      world.exit = cell
-  } else if (typeof element === 'object') {
-    element.world = world
-    element.cell  = cell
-    getList(world, element).push(element)
-  }
-  return cell
-}
-
-function kill(world, element) {
-  let list = getList(element)
-  if (!list)
-    return false
-  let index = list.indexOf(element)
-  if (index < 0)
-    return false
-  list.splice(index, 1)
-  return true
-}
-
-function elementsAt(world, cell) {
-  return entitiesAt(world, cell).concat(itemsAt(world, cell))
-}
-
-function entitiesAt(world, cell) {
-  return world.entities.filter( entity => Cell.isEqual(entity.cell, cell) )
-}
-
-function itemsAt(world, cell) {
-  return world.items.filter( item => Cell.isEqual(item.cell, cell) )
-}
-
-function getList(world, element) {
-  switch (element.type) {
-    case 'entity':
-      return world.entities
-    case 'item':
-      return world.items
-    default:
-      return null
-  }
-}
-
-function fill(data, value, rect) {
-  if (typeof value === 'undefined')
-    value = WALL
-  let size = getSize(data)
-  if (rect) {
-    let cells = Rect.getCells(rect)
-    for (let cell of cells)
-      setAt(data, cell, value)
-  } else {
-    let i = data.length
-    while (i--)
-      data[i] = value
-  }
-  return data
-}
-
-function clear(data) {
-  fill(data, FLOOR)
-  return data
-}
-
-function getSize(data) {
-  return sqrt(data.length)
-}
-
-function getAt(data, cell) {
-  let size = getSize(data)
-  if (!Cell.isInside(cell, size))
-    return null
-  let index = Cell.toIndex(cell, size)
-  return data[index]
-}
-
-function getTileAt(data, cell) {
-  return tiles[getAt(data, cell)]
-}
-
-function setAt(data, cell, value) {
-  let size = getSize(data)
-  if (!Cell.isInside(cell, size))
-    return null
-  let index = Cell.toIndex(cell, size)
-  data[index] = value
-  return value
-}
-
-function openDoor(world, cell, entity) {
-  if (!entity)
-    entity = null
-  let data = world.data.slice()
-  let tile = getTileAt(data, cell)
-  if (tile.door && !tile.walkable) {
-    setAt(data, cell, DOOR_OPEN)
-    world.data = data
-    return true
-  }
-  return false
-}
-
-function closeDoor(world, cell, entity) {
-  if (!entity)
-    entity = null
-  let data = world.data.slice()
-  let tile = getTileAt(data, cell)
-  if (tile.door && tile.walkable) {
-    setAt(data, cell, DOOR)
-    world.data = data
-    return true
-  }
-  return false
-}
-
-function toggleDoor(world, cell, entity) {
-  let tile = getTileAt(world.data, cell)
-  if (tile.door)
-    if (!tile.walkable)
-      return openDoor(world, cell, entity)
-    else
-      return closeDoor(world, cell, entity)
-  return false
-}

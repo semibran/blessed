@@ -1,9 +1,10 @@
 import RNG    from './rng'
 import FOV    from './fov'
+import Entity from './entity'
+import World  from './world'
+import Gen    from './gen'
 import Cell   from './cell'
 import Rect   from './rect'
-import Gen    from './gen'
 import Color  from './color'
-import Entity from './entity'
 
-export { RNG, FOV, Cell, Rect, Gen, Color, Entity }
+export { RNG, FOV, Entity, World, Gen, Cell, Rect, Color }
