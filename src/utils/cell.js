@@ -11,17 +11,49 @@ const directions = {
 const { left, upLeft, up, upRight, right, downRight, down, downLeft } = directions
 const cardinalDirections = { left, up, right, down }
 
-const Cell = {
+export default {
 
   // Constants
   left, right, up, down, upLeft, upRight, downLeft, downRight, directions, cardinalDirections,
 
   // Methods
-  toString, fromString, toIndex, fromIndex, isEqual, isEdge, isInside, getNeighbors, getManhattan, getDistance
+  isCell, isEqual, isEdge, isInside, isNeighbor, toString, fromString, toIndex, fromIndex, getNeighbors, getManhattan, getDistance
 
 }
 
-export default Cell
+function isCell(value) {
+  return value && Array.isArray(value) && value.length === 2 && !value.filter(value => isNaN(value) || typeof value !== 'number').length
+}
+
+function isEqual(a, b) {
+  return a[0] === b[0] && a[1] === b[1]
+}
+
+function isEdge(cell, size) {
+  let [x, y] = cell
+  let rect = [0, 0, size, size]
+  if (Array.isArray(size))
+    rect = size
+  let [rectX, rectY, rectWidth, rectHeight] = rect
+  return isInside(cell, size) && (x === rectX || x === rectX + rectWidth - 1 || y === rectY || y === rectY + rectHeight - 1)
+}
+
+function isInside(cell, size) {
+  let [x, y] = cell
+  let rect = [0, 0, size, size]
+  if (Array.isArray(size))
+    rect = size
+  let [rectX, rectY, rectWidth, rectHeight] = rect
+  return x >= rectX && y >= rectY && x < rectX + rectWidth && y < rectY + rectHeight
+}
+
+function isNeighbor(cell, other) {
+  let [cx, cy] = cell
+  let [ox, oy] = other
+  let dx = Math.abs(ox - cx)
+  let dy = Math.abs(oy - cy)
+  return (!dx || dx === 1) && (!dy || dy === 1)
+}
 
 function toString(cell) {
   return cell.toString()
@@ -42,30 +74,8 @@ function fromIndex(index, size) {
   return [x, y]
 }
 
-function isEqual(a, b) {
-  return a[0] === b[0] && a[1] === b[1]
-}
-
-function isEdge(cell, size) {
-  let [x, y] = cell
-  let rect = [0, 0, size, size]
-  if ( Array.isArray(size) )
-    rect = size
-  let [rectX, rectY, rectWidth, rectHeight] = rect
-  return isInside(cell, size) && (x === rectX || x === rectX + rectWidth - 1 || y === rectY || y === rectY + rectHeight - 1)
-}
-
-function isInside(cell, size) {
-  let [x, y] = cell
-  let rect = [0, 0, size, size]
-  if ( Array.isArray(size) )
-    rect = size
-  let [rectX, rectY, rectWidth, rectHeight] = rect
-  return x >= rectX && y >= rectY && x < rectX + rectWidth && y < rectY + rectHeight
-}
-
 function getNeighbors(cell, diagonals, step) {
-  if (!cell)
+  if (!isCell(cell))
     throw new TypeError(`Cannot get neighbors of cell '${cell}'`)
   step = step || 1
   let [x, y] = cell

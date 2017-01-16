@@ -1,4 +1,4 @@
-import { RNG, World, Cell, Rect } from './index'
+import { RNG, World, Actor, Cell, Rect } from './index'
 
 const { FLOOR, DOOR, DOOR_SECRET, ENTRANCE, EXIT } = World.tileIds
 
@@ -6,7 +6,7 @@ let rng = RNG.create()
 
 export default { createDungeon }
 
-function createDungeon(size, seed, hero, id) {
+function createDungeon(size, seed) {
 
   if (!size % 2)
     throw new RangeError(`Cannot create dungeon of even size ${size}`)
@@ -21,7 +21,7 @@ function createDungeon(size, seed, hero, id) {
 
   // console.log('Seed:', seed)
 
-  let world = World.create(size, id).fill()
+  let world = World.create(size).fill()
   let data = world.data
 
   let rooms = findRooms(size)
@@ -63,7 +63,7 @@ function createDungeon(size, seed, hero, id) {
     else {
       if (typeof flags === 'string')
         flags = flags.split(' ')
-      else if (Array.isArray(flags)) {
+      else if (Cell.isCell(flags)) {
         cell = flags
         flags = []
       }
@@ -71,19 +71,20 @@ function createDungeon(size, seed, hero, id) {
     flags = new Set(flags)
 
     if (!cell) {
-      if (flags.has('secret'))
-        rooms = world.rooms.secret
-      else
-        rooms = world.rooms.normal
 
-      let room = rng.choose([...rooms])
-      if (flags.has('center'))
-        cell = room.center
-      else {
-        do {
+      if (flags.has('secret'))
+        rooms = [...world.rooms.secret]
+      else
+        rooms = [...world.rooms.normal]
+
+      do {
+        let room = rng.choose(rooms)
+        if (flags.has('center'))
+          cell = room.center
+        else
           cell = rng.choose(room.cells)
-        } while (world.getAt(cell) !== FLOOR || world.elementsAt(cell).length)
-      }
+      } while (world.getAt(cell) !== FLOOR || world.elementsAt(cell).length)
+
     }
 
     world.spawn(element, cell)
@@ -92,10 +93,11 @@ function createDungeon(size, seed, hero, id) {
 
   }
 
-  if (hero) {
-    let cell = spawn(hero, 'center')
-    spawn(ENTRANCE, cell)
-  }
+  let i = 3
+  while (i--)
+    spawn(Actor.create({ kind: 'wyrm', faction: 'enemies', speed: 1 / 2 }))
+
+  spawn(ENTRANCE, 'center')
   spawn(EXIT, 'center')
 
   return world

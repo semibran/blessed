@@ -1,32 +1,72 @@
-import { RNG, FOV, Entity, World, Gen, Cell, Color } from './utils/index'
+import { Game, Cell, Color } from './utils/index'
 
 const blessed = require('blessed')
-
 const options = { smartCSR: true }
 
 let screen = blessed.screen(options)
-screen.title = 'Hello world!'
-
-let { BLACK, MAROON, GREEN, OLIVE, NAVY, PURPLE, TEAL, SILVER, GRAY: YELLOW, RED, LIME, YELLOW: GRAY, BLUE, FUCHSIA, AQUA, WHITE } = Color
+screen.title = 'Roguelike'
+const { BLACK, MAROON, GREEN, OLIVE, NAVY, PURPLE, TEAL, SILVER, GRAY: YELLOW, RED, LIME, YELLOW: GRAY, BLUE, FUCHSIA, AQUA, WHITE } = Color
 
 const sprites = function () {
 
-  const floor      = [183, TEAL]
-  const wall       = ['#', OLIVE]
-  const door       = ['+', MAROON]
-  const doorOpen   = ['/', MAROON]
+  const floor      = [183, OLIVE]
+  const wall       = ['#', PURPLE]
+  const door       = ['+', TEAL]
+  const doorOpen   = ['/', TEAL]
   const doorSecret = wall
-  const entrance   = ['<', WHITE]
   const exit       = ['>', WHITE]
+  const entrance   = ['<', WHITE]
   const human      = ['@', WHITE]
+  const wyrm       = ['s', GREEN]
+  const corpse     = ['%', MAROON]
 
-  return { floor, wall, door, doorOpen, doorSecret, entrance, exit, human }
+  return { floor, wall, door, doorOpen, doorSecret, entrance, exit, human, wyrm, corpse }
 
 }()
 
-function render(world, entity, mouse) {
+const WORLD_SIZE = 25
+const DISPLAY_WIDTH  = 80
+const DISPLAY_HEIGHT = 25
+
+let game = Game.create(WORLD_SIZE)
+game.start()
+
+let display = blessed.box({
+  top: 'center',
+  left: 'center',
+  width: DISPLAY_WIDTH,
+  height: DISPLAY_HEIGHT,
+  tags: true
+})
+
+screen.append(display)
+
+let box = blessed.box({
+  parent: display,
+  width: WORLD_SIZE,
+  height: DISPLAY_HEIGHT,
+  tags: true
+})
+
+display.append(box)
+
+let log = blessed.log({
+  left: WORLD_SIZE,
+  width: DISPLAY_WIDTH - WORLD_SIZE,
+  height: DISPLAY_HEIGHT,
+  tags: true,
+  border: {
+    type: 'line'
+  }
+})
+
+display.append(log)
+
+function getView(actor, mouse) {
+  if (!actor)
+    throw new TypeError(`Cannot get view of actor '${actor}'`)
   let view = ''
-  let { data, size } = world
+  let { data, size } = actor.world
   let mouseX, mouseY
   if (mouse)
     [mouseX, mouseY] = mouse
@@ -38,15 +78,18 @@ function render(world, entity, mouse) {
     for (let id of row) {
       let cell = [x, y]
       let char = ' ', color
-      let type = World.tiles[id].name
-      if (entity)
-        type = entity.known[world.id][cell]
+      let type = actor.world.tileAt(cell).kind
+      if (actor)
+        if (actor.known[actor.worldId])
+          type = actor.known[actor.worldId][cell]
+        else
+          type = null
       if (type) {
         if ( !(type in sprites) ) {
           throw new TypeError('Unrecognized sprite: ' + type)
         }
         [char, color] = sprites[type]
-        if (entity && !entity.seeing[cell])
+        if (actor && !actor.seeing[cell])
           color = GRAY
       }
       if (typeof char === 'number')
@@ -56,7 +99,7 @@ function render(world, entity, mouse) {
           char = `{black-fg}{${color}-bg}${char}{/}`
         else
           char = `{${color}-fg}${char}{/}`
-      line += '{black-bg}' + char + '{/}'
+      line += char
       x++
     }
     view = line + view + '\n'
@@ -64,147 +107,116 @@ function render(world, entity, mouse) {
   return view
 }
 
-let rng = RNG.create()
-
-let floors = {}
-let floor = 0
-let world
-let hero = Entity.create( { kind: 'human', faction: 'hero' } )
-let mouse = null
-let moving = false
-
-function ascend() {
-  let newFloor = floor - 1
-  if (!floors[newFloor])
-    log.add(`You can't leave the dungeon.`)
-  else {
-    floor = newFloor
-    hero.world = world = floors[floor]
-    hero.cell = world.exit
-    hero.look()
-    log.add(`You go back upstairs to Floor ${floor}.`)
-  }
-  rerender()
-}
-
-function descend() {
-  floor++
-  if (!floors[floor]) {
-    world = Gen.createDungeon(25, rng, hero, floor)
-    hero.look()
-    floors[floor] = world
-    if (floor === 1)
-      log.add(`{${YELLOW}-fg}Welcome to the Dungeon!{/}`)
-    else
-      log.add(`You head downstairs to {${YELLOW}-fg}Floor ${floor}{/}.`)
-  } else {
-    hero.world = world = floors[floor]
-    hero.cell = world.entrance
-    hero.look()
-    log.add(`You head back downstairs to {${YELLOW}-fg}Floor ${floor}{/}.`)
-  }
-  rerender()
-}
-
-function move(direction) {
-  hero.move(direction)
-  rerender()
-}
-
-function rerender() {
-  box.setContent(render(world, hero, mouse))
+function render() {
+  let view = getView(hero)
+  box.setContent(view)
   screen.render()
 }
 
-let box = blessed.box({
-  top: 'center',
-  left: 'center',
-  width: 25,
-  height: 25,
-  tags: true
-})
-
-let log = blessed.log({
-  bottom: 0,
-  width: '100%',
-  height: 7,
-  tags: true,
-  border: {
-    type: 'line'
-  }
-})
-
-box.on('mousemove', event => {
-  mouse = [event.x - box.aleft, event.y - box.atop]
-  rerender()
-})
-
-box.on('click', event => {
-  mouse = [event.x - box.aleft, event.y - box.atop]
-
-  let target = [event.x - box.aleft, event.y - box.atop]
-
-  if (moving) {
-    moving = false
-    return
-  }
-
-  if (Cell.isEqual(hero.cell, target)) {
-    let tile = world.tileAt(hero.cell)
-    if (tile.kind === 'entrance')
-      ascend()
-    else if (tile.kind === 'exit')
-      descend()
-    return
-  }
-
-  function step() {
-    if (!moving)
-      return
-    let moved = moving = hero.moveTo(target)
-    if (moved)
-      setTimeout(step, 1000 / 30)
-    rerender()
-  }
-  moving = true
-  step()
-
-})
-
-box.on('mouseout', event => {
-  mouse = null
-  rerender()
-})
-
-const directions = Cell.directions
-const WASD = {
-  w: directions.up,
-  a: directions.left,
-  s: directions.down,
-  d: directions.right
-}
-
-screen.on('keypress', (ch, key) => {
-
-  if (key.name === 'escape' || key.ctrl && key.name === 'c')
+screen.on('keypress', (char, key) => {
+  if (key.ctrl && key.name === 'c')
     return process.exit(0)
-
-  if (!moving) {
-    if (key.name in directions)
-      move(directions[key.name])
-    else if (key.name in WASD)
-      move(WASD[key.name])
+  if (hero.health) {
+    if (key.name in Cell.directions) {
+      let direction = Cell.directions[key.name]
+      game.input('move', direction)
+    } else if (key.ch === '>') {
+      game.input('descend')
+    } else if (key.ch === '<') {
+      game.input('ascend')
+    }else if (key.name === 'o') {
+      game.input('open')
+    } else if (key.name === 'c') {
+      game.input('close')
+    }
   }
-
-  let tile = world.tileAt(hero.cell)
-  if (key.ch === '<' && tile.kind === 'entrance')
-    ascend()
-  else if (key.ch === '>' && tile.kind === 'exit')
-    descend()
-
 })
 
-screen.append(box)
-screen.append(log)
+let { hero } = game
 
-descend()
+.on('tick', () => {
+  render()
+})
+
+.on('move', (actor, direction) => {
+  if (actor === hero) {
+    let elements = hero.world.elementsAt(hero.cell)
+    let corpse = elements.find(element => element.kind === 'corpse')
+    if (corpse) {
+      let origin = corpse.origin
+      let [,color] = sprites[origin]
+      log.add(`There's a corpse of a {${color}-fg}${origin}{/} lying here.`)
+    } else {
+      let tile = hero.world.tileAt(hero.cell)
+      if (tile.kind === 'entrance')
+        log.add(`There's a set of stairs going back up here.`)
+      else if (tile.kind === 'exit')
+        log.add(`There's a staircase going down here.`)
+    }
+  }
+})
+
+.on('attack', (actor, target) => {
+  if (actor === hero) {
+    if (!target.health) {
+      log.add(`{${RED}-fg}You slay the ${target.kind}!{/}`)
+    } else {
+      log.add(`{${RED}-fg}You whack the ${target.kind}.{/}`)
+    }
+  } else if (target === hero) {
+    if (!hero.health) {
+      log.add(`{${RED}-fg}The ${actor.kind} kills you!{/}`)
+    } else {
+      log.add(`{${YELLOW}-fg}The ${actor.kind} attacks you.{/}`)
+    }
+  }
+})
+
+.on('open', (actor, door, secret) => {
+  if (actor === hero) {
+    if (secret)
+      log.add(`{${YELLOW}-fg}You find a secret room!{/}`)
+    else
+      log.add('You open the door.')
+  }
+})
+
+.on('close', (actor, doors) => {
+  if (actor === hero)
+    log.add(`You close the door.`)
+})
+
+.on('close-fail', actor => {
+  if (actor === hero)
+    log.add(`No doors to close!`)
+})
+
+.on('descend', actor => {
+  if (actor === hero) {
+    log.add(`You head down the staircase to {${YELLOW}-fg}Floor ${game.floor}{/}.`)
+    screen.render()
+  }
+})
+
+.on('descend-fail', actor => {
+  if (actor === hero) {
+    log.add(`There's nowhere to go down here!`)
+    screen.render()
+  }
+})
+
+.on('ascend', actor => {
+  if (actor === hero) {
+    log.add(`You go back upstairs to {${YELLOW}-fg}Floor ${game.floor}{/}.`)
+    screen.render()
+  }
+})
+
+.on('ascend-fail', actor => {
+  if (actor === hero) {
+    log.add(`There's nowhere to go up here!`)
+    screen.render()
+  }
+})
+
+render()

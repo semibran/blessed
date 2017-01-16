@@ -62,13 +62,13 @@ const { FLOOR, WALL, DOOR, DOOR_OPEN, DOOR_SECRET, ENTRANCE, EXIT } = tileIds
 
 export default { create, tiles, tileIds, tileCosts }
 
-function create(size, id) {
+function create(size) {
 
   let data  = new Uint8ClampedArray(size * size)
   let world = {
 
     // Properties
-    size, data, elements: new Set, id: id || null, entrance: null, exit: null,
+    size, data, elements: new Set, entrance: null, exit: null,
 
     // Methods
     getAt, tileAt, elementsAt, setAt, fill, clear, spawn, kill, findPath
@@ -138,11 +138,11 @@ function create(size, id) {
   }
 
   function kill(element) {
-    elements.remove(element)
+    world.elements.delete(element)
   }
 
   function findPath(start, goal, costs, diagonals) {
-    
+
     if (!costs)
       costs = {}
 
